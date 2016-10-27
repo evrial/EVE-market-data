@@ -1,0 +1,5 @@
+*.pyc
+.ipynb_checkpoints/
+gethistory.log
+history.csv
+history.csv.gz
