@@ -1,5 +1,5 @@
 *.pyc
+*.gz
+*.bz2
 .ipynb_checkpoints/
 gethistory.log
-history.csv
-history.csv.gz
