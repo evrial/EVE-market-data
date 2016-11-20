@@ -1,34 +1,44 @@
+# CREST API in maintenance mode
 # latest SDE in csv format from https://www.fuzzwork.co.uk/dump/latest/
 
 import csv
+import gzip
 import time
 import logging
-
-import pandas as pd
+import pandas
 import requests
 import concurrent.futures as cf
 from requests_futures.sessions import FuturesSession
 from tqdm import tqdm
+
 
 logging.basicConfig(
     filename='gethistory.log', level=logging.INFO,
     format='%(asctime)s %(levelname)s %(message)s'
     )
 
-
-def RateLimited(maxPerSecond):
-    minInterval = 1.0 / float(maxPerSecond)
+def rate_limited(period, damping = 1.0):
+    '''
+    https://github.com/tomasbasham/ratelimit
+    Prevent a method from being called
+    if it was previously called before
+    a time widows has elapsed.
+    :param period: The time window after which method invocations can continue.
+    :param damping: A factor by which to dampen the time window.
+    :return function: Decorated function that will forward method invocations
+    if the time window has elapsed.
+    '''
+    frequency = damping / float(period)
     def decorate(func):
-        lastTimeCalled = [0.0]
-        def rateLimitedFunction(*args,**kargs):
-            elapsed = time.clock() - lastTimeCalled[0]
-            leftToWait = minInterval - elapsed
-            if leftToWait>0:
-                time.sleep(leftToWait)
-            ret = func(*args,**kargs)
-            lastTimeCalled[0] = time.clock()
-            return ret
-        return rateLimitedFunction
+        last_called = [0.0]
+        def func_wrapper(*args, **kargs):
+            elapsed = time.clock() - last_called[0]
+            left_to_wait = frequency - elapsed
+            if left_to_wait > 0:
+                time.sleep(left_to_wait)
+            last_called[0] = time.clock()
+            return func(*args, **kargs)
+        return func_wrapper
     return decorate
 
 def processData(result,csvwriter):
@@ -40,7 +50,7 @@ def processData(result,csvwriter):
                 csvwriter.writerow([
                     result.typeid,
                     result.regionid,
-                    order['date'],
+                    order['date']+'Z',
                     order['lowPrice'],
                     order['highPrice'],
                     order['avgPrice'],
@@ -55,7 +65,7 @@ def processData(result,csvwriter):
         logging.warn(e)
         return False
 
-@RateLimited(150)
+@rate_limited(600)
 def getData(requestsConnection,typeid,regionid):
     url='https://crest-tq.eveonline.com/market/{}/history/?type=https://crest-tq.eveonline.com/inventory/types/{}/'.format(regionid,typeid)
     future=requestsConnection.get(url)
@@ -65,16 +75,16 @@ def getData(requestsConnection,typeid,regionid):
 
 
 if __name__ == '__main__':
-    df = pd.read_csv('invTypes.csv')
+    df = pandas.read_csv('invTypes.csv.bz2')
     baseitemids = df[(df.published == 1) & (df.marketGroupID != 'None')].typeID
-    regionids = pd.read_csv('mapRegions.csv').regionID
+    regionids = pandas.read_csv('mapRegions.csv.bz2').regionID
 
-    session = FuturesSession(max_workers=10)
+    session = FuturesSession(max_workers=70)
     session.headers.update({'UserAgent':'Fuzzwork Market Monitor'});
 
-    with open('history.csv', 'wb') as csvfile:
-        csvwriter = csv.writer(csvfile, dialect='excel')
-        csvwriter.writerow(['typeID', 'regionID', 'date', 'lowPrice', 'highPrice', 'avgPrice', 'volume', 'orderCount'])
+    with gzip.open('latest-history.csv.gz', 'w') as f:
+        csvwriter = csv.writer(f, dialect='excel')
+        csvwriter.writerow(['type_id', 'region_id', 'date', 'lowest', 'highest', 'average', 'volume', 'order_count'])
 
         for region in regionids:
             futures = []
