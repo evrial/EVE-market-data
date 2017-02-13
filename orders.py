@@ -1,30 +1,34 @@
-import logging, sys
-
-import concurrent.futures as cf
+import logging
+import sys
+from concurrent.futures import as_completed
 from requests_futures.sessions import FuturesSession
-
-TEST_URL = 'https://crest-tq.eveonline.com/market/10000002/orders/all/?page='
 
 logging.basicConfig(
     stream=sys.stderr, level=logging.INFO,
-    format='%(relativeCreated)s %(message)s',
-    )
+    format='%(relativeCreated)s %(message)s')
+
+route_url = 'https://esi.tech.ccp.is/latest/markets/{region_id}/orders/'
+region_id = 10000002
 
 session = FuturesSession(max_workers=20)
 futures = []
 
-logging.info('Sending requests to CREST API')
-for n in range(10):
-    try_url = TEST_URL + str(n)
-    future = session.get(try_url)
+total = 0
+
+logging.info('Sending requests to ESI API')
+for n in range(1, 35):
+    future = session.get(
+        route_url.format(region_id=region_id),
+        params={'order_type': 'all', 'datasource': 'tranquility', 'page': n})
     futures.append(future)
 
 logging.info('Requests sent; awaiting responses')
 
-for future in cf.as_completed(futures, timeout=15):
+for future in as_completed(futures, timeout=30):
     res = future.result()
     print(future)
-    if 'next' in res.json():
-        print(res.json()['next'])
+    print(len(res.json()))
+    total += len(res.json())
 
 logging.info('Process complete')
+print('Total {} orders'.format(total))

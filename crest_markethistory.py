@@ -65,7 +65,7 @@ def processData(result,csvwriter):
         logging.warn(e)
         return False
 
-@rate_limited(600)
+@rate_limited(150)
 def getData(requestsConnection,typeid,regionid):
     url='https://crest-tq.eveonline.com/market/{}/history/?type=https://crest-tq.eveonline.com/inventory/types/{}/'.format(regionid,typeid)
     future=requestsConnection.get(url)
@@ -82,7 +82,7 @@ if __name__ == '__main__':
     session = FuturesSession(max_workers=70)
     session.headers.update({'UserAgent':'Fuzzwork Market Monitor'});
 
-    with gzip.open('latest-history.csv.gz', 'w') as f:
+    with gzip.open('history-latest.csv.gz', 'w') as f:
         csvwriter = csv.writer(f, dialect='excel')
         csvwriter.writerow(['type_id', 'region_id', 'date', 'lowest', 'highest', 'average', 'volume', 'order_count'])
 
